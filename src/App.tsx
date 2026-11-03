@@ -1,30 +1,50 @@
-import { useState } from "react"
+import { createClient } from "@supabase/supabase-js"
+import { useEffect, useState } from "react"
 
-type Range = "실시간" | "24시간" | "7일"
-
-const soundData: Record<Range, {
-  label: string
-  values: number[]
-  times: string[]
-}> = {
-  실시간: {
-    label: "최근 30분",
-    values: [42, 45, 44, 51, 48, 55, 53, 59, 57, 62, 58, 64, 61, 68, 66, 68],
-    times: ["14:00", "14:06", "14:12", "14:18", "14:24", "14:30"],
-  },
-  "24시간": {
-    label: "오늘 00:00부터",
-    values: [37, 35, 34, 36, 42, 48, 55, 61, 58, 64, 62, 57, 54, 59, 65, 68],
-    times: ["00시", "05시", "10시", "15시", "20시", "현재"],
-  },
-  "7일": {
-    label: "최근 7일 평균",
-    values: [48, 52, 46, 58, 55, 63, 59, 61, 57, 64, 60, 67, 62, 58, 65, 68],
-    times: ["월", "화", "수", "목", "금", "토"],
-  },
+interface Reading {
+  id: number | string
+  value: number
+  created_at: string
 }
 
-const ranges: Range[] = ["실시간", "24시간", "7일"]
+type RealtimeStatus = "connecting" | "connected" | "disconnected"
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey)
+    : null
+
+function normalizeReading(row: unknown): Reading | null {
+  if (!row || typeof row !== "object") return null
+  const record = row as Record<string, unknown>
+  const value = Number(record.value)
+  if (
+    (typeof record.id !== "number" && typeof record.id !== "string") ||
+    !Number.isFinite(value) ||
+    typeof record.created_at !== "string" ||
+    !Number.isFinite(Date.parse(record.created_at))
+  ) {
+    return null
+  }
+  return {
+    id: record.id,
+    value,
+    created_at: record.created_at,
+  }
+}
+
+function mergeReadings(current: Reading[], incoming: Reading[]): Reading[] {
+  const byId = new Map(current.map((reading) => [String(reading.id), reading]))
+  incoming.forEach((reading) => byId.set(String(reading.id), reading))
+  return [...byId.values()]
+    .sort(
+      (left, right) =>
+        Date.parse(left.created_at) - Date.parse(right.created_at),
+    )
+    .slice(-100)
+}
 
 function WaveIcon() {
   return (
@@ -40,33 +60,185 @@ function WaveIcon() {
 }
 
 function App() {
-  const [range, setRange] = useState<Range>("실시간")
-  const dataset = soundData[range]
+  const [readings, setReadings] = useState<Reading[]>([])
+  const [realtimeStatus, setRealtimeStatus] =
+    useState<RealtimeStatus>("connecting")
+  const [connectionError, setConnectionError] = useState("")
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const values = readings.map((reading) => reading.value)
+  const isConnected = realtimeStatus === "connected"
   const chartWidth = 720
   const chartHeight = 280
   const padding = { top: 22, right: 18, bottom: 18, left: 42 }
-  const minValue = 20
-  const maxValue = 100
-  const points = dataset.values.map((value, index) => {
+  const dataMin = values.length ? Math.min(...values) : 20
+  const dataMax = values.length ? Math.max(...values) : 100
+  const scalePadding = Math.max((dataMax - dataMin) * 0.1, 5)
+  const minValue = values.length
+    ? Math.floor((dataMin - scalePadding) / 10) * 10
+    : 20
+  const maxValue = values.length
+    ? Math.ceil((dataMax + scalePadding) / 10) * 10
+    : 100
+  const gridValues = Array.from({ length: 5 }, (_, index) =>
+    Math.round(maxValue - ((maxValue - minValue) * index) / 4),
+  )
+  const points = values.map((value, index) => {
     const x =
-      padding.left +
-      (index / (dataset.values.length - 1)) *
-        (chartWidth - padding.left - padding.right)
+      values.length === 1
+        ? chartWidth - padding.right
+        : padding.left +
+          (index / (values.length - 1)) *
+            (chartWidth - padding.left - padding.right)
+    const boundedValue = Math.min(maxValue, Math.max(minValue, value))
     const y =
       padding.top +
-      ((maxValue - value) / (maxValue - minValue)) *
+      ((maxValue - boundedValue) / (maxValue - minValue)) *
         (chartHeight - padding.top - padding.bottom)
     return { x, y, value }
   })
   const linePath = points
     .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
     .join(" ")
-  const areaPath = `${linePath} L ${points.at(-1)?.x} ${chartHeight - padding.bottom} L ${points[0].x} ${chartHeight - padding.bottom} Z`
-  const average = Math.round(
-    dataset.values.reduce((sum, value) => sum + value, 0) /
-      dataset.values.length,
-  )
-  const peak = Math.max(...dataset.values)
+  const areaPath = points.length
+    ? `${linePath} L ${points.at(-1)?.x} ${chartHeight - padding.bottom} L ${points[0].x} ${chartHeight - padding.bottom} Z`
+    : ""
+  const average = values.length
+    ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+    : null
+  const peak = values.length ? Math.max(...values) : null
+  const currentValue = values.at(-1)
+  const statusLabel =
+    currentValue === undefined
+      ? "대기 중"
+      : currentValue < 40
+        ? "조용함"
+        : currentValue < 70
+          ? "보통"
+          : "주의"
+  const soundDescription =
+    currentValue === undefined
+      ? "Supabase에서 측정 데이터를 기다리고 있어요"
+      : currentValue < 40
+        ? "조용한 환경이에요"
+        : currentValue < 70
+          ? "대화 소리와 비슷한 수준이에요"
+          : "주변 소음이 큰 편이에요"
+  const levelPosition =
+    currentValue === undefined
+      ? 0
+      : Math.min(100, Math.max(0, ((currentValue - 30) / 70) * 100))
+  const chartLabel =
+    readings.length > 0
+      ? `최근 ${readings.length}개 · Supabase Realtime`
+      : "Supabase에서 측정 데이터를 기다리는 중"
+  const realtimeStatusText =
+    realtimeStatus === "connected"
+      ? "Supabase 실시간 연결됨"
+      : realtimeStatus === "connecting"
+        ? "Supabase 연결 중"
+        : "Supabase 연결 끊김"
+  const timeLabels = values.length
+    ? Array.from(
+        new Set(
+          [0, 0.2, 0.4, 0.6, 0.8, 1].map((fraction) =>
+            Math.round((values.length - 1) * fraction),
+          ),
+        ),
+      ).map((index) => ({
+        index,
+        label: new Date(readings[index].created_at).toLocaleTimeString(
+          "ko-KR",
+          { hour: "2-digit", minute: "2-digit", second: "2-digit" },
+        ),
+      }))
+    : []
+
+  useEffect(() => {
+    let active = true
+    if (!supabase) {
+      setRealtimeStatus("disconnected")
+      setConnectionError(
+        ".env에 VITE_SUPABASE_URL과 VITE_SUPABASE_ANON_KEY를 설정해 주세요.",
+      )
+      return
+    }
+
+    setRealtimeStatus("connecting")
+    const channel = supabase
+      .channel("readings-dashboard")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "readings" },
+        (payload) => {
+          const reading = normalizeReading(payload.new)
+          if (!reading) {
+            setConnectionError(
+              "새 readings 행에 id, value, created_at 값이 있는지 확인해 주세요.",
+            )
+            return
+          }
+          setReadings((current) => mergeReadings(current, [reading]))
+          setLastUpdated(new Date(reading.created_at))
+        },
+      )
+      .subscribe((status) => {
+        if (!active) return
+        if (status === "SUBSCRIBED") {
+          setRealtimeStatus("connected")
+          setConnectionError("")
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          setRealtimeStatus("disconnected")
+          setConnectionError(
+            "Supabase Realtime 구독에 실패했습니다. readings 테이블을 supabase_realtime publication에 추가하고 SELECT 권한을 확인해 주세요.",
+          )
+        }
+      })
+
+    const loadReadings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("readings")
+          .select("id, value, created_at")
+          .order("created_at", { ascending: false })
+          .limit(100)
+        if (!active) return
+        if (error) {
+          setConnectionError(`readings 조회 실패: ${error.message}`)
+          return
+        }
+
+        const initialReadings = (data ?? [])
+          .map((row) => normalizeReading(row))
+          .filter((row): row is Reading => row !== null)
+        setReadings((current) => mergeReadings(current, initialReadings))
+        if (initialReadings.length > 0) {
+          const newest = initialReadings.reduce((latest, row) =>
+            Date.parse(row.created_at) > Date.parse(latest.created_at)
+              ? row
+              : latest,
+          )
+          setLastUpdated(new Date(newest.created_at))
+        }
+      } catch (error) {
+        if (!active) return
+        setConnectionError(
+          `readings 조회 실패: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        )
+      }
+    }
+    void loadReadings()
+
+    return () => {
+      active = false
+      void supabase.removeChannel(channel)
+    }
+  }, [])
 
   return (
     <main className="min-h-screen bg-[#f3f5f2] text-[#17201b]">
@@ -113,10 +285,16 @@ function App() {
           <div className="mt-auto rounded-2xl border border-[#dfe5dd] bg-white p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold">센서 상태</span>
-              <span className="h-2 w-2 rounded-full bg-[#55a762] shadow-[0_0_0_4px_#e4f3e6]" />
+              <span
+                className={`h-2 w-2 rounded-full shadow-[0_0_0_4px_#e4f3e6] ${
+                  isConnected ? "bg-[#55a762]" : "bg-[#a2aaa4]"
+                }`}
+              />
             </div>
             <p className="mt-3 text-sm font-extrabold">SOUND-01</p>
-            <p className="mt-0.5 text-xs text-[#89928c]">회의실 A · 연결됨</p>
+            <p className="mt-0.5 text-xs text-[#89928c]">
+              회의실 A · {realtimeStatusText}
+            </p>
           </div>
         </aside>
 
@@ -142,11 +320,26 @@ function App() {
                 회의실 A의 소음 상태를 실시간으로 확인하세요.
               </p>
             </div>
-            <div className="mt-1 hidden items-center gap-2 rounded-full border border-[#dce2dc] bg-white px-4 py-2 text-xs font-bold text-[#526057] shadow-sm sm:flex">
-              <span className="h-2 w-2 rounded-full bg-[#57a964]" />
-              실시간 수집 중
+            <div
+              className="mt-1 flex shrink-0 items-center gap-2 rounded-full border border-[#dce2dc] bg-white px-4 py-2 text-xs font-bold text-[#526057] shadow-sm"
+              aria-live="polite"
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isConnected ? "bg-[#57a964]" : "bg-[#a2aaa4]"
+                }`}
+              />
+              {realtimeStatusText}
             </div>
           </header>
+          {connectionError && (
+            <p
+              className="mt-3 rounded-xl border border-[#efd5ce] bg-[#fff7f4] px-4 py-3 text-sm text-[#9b4935]"
+              role="alert"
+            >
+              {connectionError}
+            </p>
+          )}
 
           <div className="mt-8 grid gap-5 xl:grid-cols-[0.72fr_1.28fr]">
             <article className="relative min-h-[410px] overflow-hidden rounded-[28px] bg-[#173e2c] p-7 text-white shadow-[0_24px_50px_rgba(29,60,45,0.16)] sm:p-9">
@@ -162,14 +355,14 @@ function App() {
                     </p>
                   </div>
                   <span className="rounded-full bg-[#c7f55b] px-3 py-1.5 text-xs font-extrabold text-[#173e2c]">
-                    보통
+                    {statusLabel}
                   </span>
                 </div>
 
                 <div className="my-auto py-10">
                   <div className="flex items-end gap-3">
                     <span className="text-[90px] font-black leading-none tracking-[-0.075em] tabular-nums sm:text-[108px]">
-                      68
+                      {currentValue ?? "--"}
                     </span>
                     <span className="mb-3 text-xl font-bold text-white/60">
                       dB
@@ -177,7 +370,7 @@ function App() {
                   </div>
                   <p className="mt-4 flex items-center gap-2 text-sm text-white/60">
                     <span className="inline-block h-px w-6 bg-[#c7f55b]" />
-                    대화 소리와 비슷한 수준이에요
+                    {soundDescription}
                   </p>
                 </div>
 
@@ -188,8 +381,14 @@ function App() {
                     <span>위험</span>
                   </div>
                   <div className="relative h-2 rounded-full bg-white/10">
-                    <div className="h-full w-[60%] rounded-full bg-gradient-to-r from-[#79c88a] to-[#c7f55b]" />
-                    <span className="absolute top-1/2 left-[60%] h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-[#173e2c] bg-white shadow" />
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-[#79c88a] to-[#c7f55b]"
+                      style={{ width: `${levelPosition}%` }}
+                    />
+                    <span
+                      className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-[#173e2c] bg-white shadow"
+                      style={{ left: `${levelPosition}%` }}
+                    />
                   </div>
                   <div className="mt-3 flex justify-between text-[10px] tabular-nums text-white/35">
                     <span>30 dB</span>
@@ -206,30 +405,11 @@ function App() {
                   <p className="text-lg font-extrabold tracking-[-0.025em]">
                     소음 변화
                   </p>
-                  <p className="mt-1 text-xs text-[#89918c]">
-                    {dataset.label} · 예시 데이터
-                  </p>
+                  <p className="mt-1 text-xs text-[#89918c]">{chartLabel}</p>
                 </div>
-                <div
-                  className="flex w-fit rounded-xl bg-[#f1f3f0] p-1"
-                  aria-label="조회 기간"
-                >
-                  {ranges.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      aria-pressed={range === item}
-                      onClick={() => setRange(item)}
-                      className={`rounded-lg px-3 py-2 text-xs font-bold transition ${
-                        range === item
-                          ? "bg-white text-[#173e2c] shadow-sm"
-                          : "text-[#89918c] hover:text-[#4e5c53]"
-                      }`}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
+                <span className="w-fit rounded-xl bg-[#f1f3f0] px-3 py-2 text-xs font-bold text-[#4e5c53]">
+                  최근 100개
+                </span>
               </div>
 
               <div className="mt-6 overflow-hidden">
@@ -237,7 +417,7 @@ function App() {
                   className="w-full"
                   viewBox={`0 0 ${chartWidth} ${chartHeight + 28}`}
                   role="img"
-                  aria-label={`${dataset.label} 소음 변화 선 그래프`}
+                  aria-label={`${chartLabel} 소음 변화 선 그래프`}
                 >
                   <defs>
                     <linearGradient id="chartArea" x1="0" y1="0" x2="0" y2="1">
@@ -245,7 +425,7 @@ function App() {
                       <stop offset="100%" stopColor="#5f9c70" stopOpacity="0" />
                     </linearGradient>
                   </defs>
-                  {[20, 40, 60, 80, 100].map((value) => {
+                  {gridValues.map((value) => {
                     const y =
                       padding.top +
                       ((maxValue - value) / (maxValue - minValue)) *
@@ -272,39 +452,43 @@ function App() {
                       </g>
                     )
                   })}
-                  <path d={areaPath} fill="url(#chartArea)" />
-                  <path
-                    d={linePath}
-                    fill="none"
-                    stroke="#477b58"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {points.map((point, index) => (
+                  {areaPath && <path d={areaPath} fill="url(#chartArea)" />}
+                  {linePath && (
+                    <path
+                      d={linePath}
+                      fill="none"
+                      stroke="#477b58"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                  {points.slice(-1).map((point) => (
                     <circle
                       key={`${point.x}-${point.value}`}
                       cx={point.x}
                       cy={point.y}
-                      r={index === points.length - 1 ? 5.5 : 2.5}
-                      fill={index === points.length - 1 ? "#c7f55b" : "#ffffff"}
+                      r={5.5}
+                      fill="#c7f55b"
                       stroke="#477b58"
-                      strokeWidth={index === points.length - 1 ? 3 : 2}
+                      strokeWidth={3}
                     />
                   ))}
-                  {dataset.times.map((time, index) => (
+                  {timeLabels.map(({ index, label }) => (
                     <text
-                      key={time}
+                      key={`${index}-${label}`}
                       x={
-                        padding.left +
-                        (index / (dataset.times.length - 1)) *
-                          (chartWidth - padding.left - padding.right)
+                        values.length === 1
+                          ? chartWidth - padding.right
+                          : padding.left +
+                            (index / (values.length - 1)) *
+                              (chartWidth - padding.left - padding.right)
                       }
                       y={chartHeight + 18}
                       textAnchor={
                         index === 0
                           ? "start"
-                          : index === dataset.times.length - 1
+                          : index === values.length - 1
                             ? "end"
                             : "middle"
                       }
@@ -312,9 +496,21 @@ function App() {
                       fontSize="10"
                       fontWeight="600"
                     >
-                      {time}
+                      {label}
                     </text>
                   ))}
+                  {values.length === 0 && (
+                    <text
+                      x={chartWidth / 2}
+                      y={chartHeight / 2}
+                      textAnchor="middle"
+                      fill="#89918c"
+                      fontSize="13"
+                      fontWeight="600"
+                    >
+                      아직 저장된 측정값이 없습니다
+                    </text>
+                  )}
                 </svg>
               </div>
             </article>
@@ -325,7 +521,7 @@ function App() {
               <p className="text-xs font-bold text-[#8a938d]">평균 소음</p>
               <div className="mt-3 flex items-end justify-between">
                 <p className="text-3xl font-black tracking-[-0.04em] tabular-nums">
-                  {average}
+                  {average ?? "--"}
                   <span className="ml-1 text-sm text-[#8a938d]">dB</span>
                 </p>
                 <span className="text-xs font-bold text-[#568061]">안정적</span>
@@ -335,11 +531,13 @@ function App() {
               <p className="text-xs font-bold text-[#8a938d]">최고 소음</p>
               <div className="mt-3 flex items-end justify-between">
                 <p className="text-3xl font-black tracking-[-0.04em] tabular-nums">
-                  {peak}
+                  {peak ?? "--"}
                   <span className="ml-1 text-sm text-[#8a938d]">dB</span>
                 </p>
                 <span className="text-xs font-medium text-[#8a938d]">
-                  14:27 기록
+                  {lastUpdated
+                    ? lastUpdated.toLocaleTimeString("ko-KR")
+                    : "기록 없음"}
                 </span>
               </div>
             </article>
@@ -347,18 +545,23 @@ function App() {
               <p className="text-xs font-bold text-[#8a938d]">측정 주기</p>
               <div className="mt-3 flex items-end justify-between">
                 <p className="text-3xl font-black tracking-[-0.04em] tabular-nums">
-                  2<span className="ml-1 text-sm text-[#8a938d]">초</span>
+                  {readings.length}
+                  <span className="ml-1 text-sm text-[#8a938d]">개</span>
                 </p>
                 <span className="rounded-full bg-[#edf5e9] px-2.5 py-1 text-[11px] font-bold text-[#4f7a59]">
-                  정상 수집
+                  최대 100개 표시
                 </span>
               </div>
             </article>
           </div>
 
           <footer className="mt-6 flex flex-col justify-between gap-2 border-t border-[#dde3dd] pt-5 text-[11px] text-[#919a94] sm:flex-row">
-            <p>마지막 업데이트: 2025. 06. 18. 오후 2:30:12</p>
-            <p>현재 표시된 값은 화면 구성을 위한 예시 데이터입니다.</p>
+            <p>
+              {lastUpdated
+                ? `마지막 업데이트: ${lastUpdated.toLocaleString("ko-KR")}`
+                : "마지막 업데이트: 측정값 대기 중"}
+            </p>
+            <p>Supabase readings의 새 행을 Realtime으로 구독합니다.</p>
           </footer>
         </section>
       </div>
