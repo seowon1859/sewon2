@@ -1,19 +1,352 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap');
 @import 'tailwindcss';
+
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Pretendard-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Pretendard-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Pretendard';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Pretendard-SemiBold.woff2') format('woff2');
+}
+
+@theme {
+  --font-sans: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif;
+}
+
+:root {
+  --surface: #000000;
+  --ink: #f4f7f9;
+  --ink-muted: #9da7ad;
+  --line: #283137;
+  --brand: #aad7f6;
+  --accent: #34aeff;
+  --on-brand: #000000;
+  --off: #68747b;
+  --status-on: #aad7f6;
+  --danger: #ff7a70;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+
+  --size-caption: 12px;
+  --size-label: 14px;
+  --size-body: 16px;
+  --size-title: 40px;
+  --size-value: 112px;
+  --size-stat: 32px;
+  --size-dot: 8px;
+  --size-control: 44px;
+  --size-chart: 220px;
+  --content-width: 1120px;
+  --copy-width: 640px;
+  color-scheme: dark;
+}
 
 @layer base {
   html {
-    background: #f3f5f2;
+    background: var(--surface);
   }
 
   body {
-    font-family: 'Noto Sans KR', sans-serif;
-    background: #f3f5f2;
     min-width: 320px;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--font-sans);
+  }
+
+  button {
+    border: 0;
+    border-radius: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: var(--space-1);
   }
 
   ::selection {
-    background: #c7f55b;
-    color: #173e2c;
+    background: var(--brand);
+    color: var(--on-brand);
+  }
+}
+
+.app-shell {
+  width: min(100%, var(--content-width));
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: var(--space-12) var(--space-8);
+}
+
+.product-header {
+  max-width: var(--copy-width);
+}
+
+.product-name {
+  color: var(--ink);
+  font-size: var(--size-title);
+  font-weight: 600;
+}
+
+.product-concept {
+  margin-top: var(--space-1);
+  color: var(--brand);
+  font-size: var(--size-label);
+  font-weight: 500;
+}
+
+.product-description {
+  margin-top: var(--space-3);
+  color: var(--ink-muted);
+  font-size: var(--size-body);
+  font-weight: 400;
+}
+
+.current-reading {
+  display: flex;
+  min-height: 48vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-block: var(--space-16);
+  text-align: center;
+}
+
+.metric-label,
+.control-name {
+  color: var(--ink-muted);
+  font-size: var(--size-label);
+  font-weight: 500;
+}
+
+.metric-value {
+  margin-top: var(--space-2);
+  color: var(--ink);
+  font-size: var(--size-stat);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.metric--emphasis .metric-label {
+  color: var(--brand);
+}
+
+.metric--emphasis .metric-value {
+  margin-top: var(--space-3);
+  color: var(--brand);
+  font-size: var(--size-value);
+}
+
+.metric-unit {
+  margin-left: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--size-body);
+  font-weight: 400;
+}
+
+.current-context {
+  margin-top: var(--space-4);
+  color: var(--ink-muted);
+  font-size: var(--size-body);
+}
+
+.data-layout {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-12);
+  align-items: end;
+}
+
+.metrics {
+  display: grid;
+  gap: var(--space-8);
+}
+
+.chart {
+  min-width: 0;
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: var(--size-chart);
+  overflow: visible;
+}
+
+.chart-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  fill: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: var(--size-caption);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.chart-point {
+  fill: var(--brand);
+}
+
+.chart-empty {
+  padding-block: var(--space-8);
+  color: var(--ink-muted);
+  font-size: var(--size-body);
+  text-align: center;
+}
+
+.connection-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  margin-top: var(--space-12);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  color: var(--ink-muted);
+  font-size: var(--size-label);
+  font-weight: 500;
+}
+
+.status-dot {
+  width: var(--size-dot);
+  height: var(--size-dot);
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--off);
+}
+
+.status--connecting .status-dot {
+  background: var(--brand);
+}
+
+.status--connected {
+  color: var(--status-on);
+}
+
+.status--connected .status-dot {
+  background: var(--status-on);
+}
+
+.status--error {
+  color: var(--danger);
+}
+
+.status--error .status-dot {
+  background: var(--danger);
+}
+
+.control-button {
+  min-height: var(--size-control);
+  padding: var(--space-3) var(--space-4);
+  background: var(--brand);
+  color: var(--on-brand);
+  cursor: pointer;
+  font-size: var(--size-label);
+  font-weight: 500;
+}
+
+.control-button--off {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.control-button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-12);
+  color: var(--ink-muted);
+  font-size: var(--size-caption);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --size-title: 24px;
+    --size-value: 72px;
+    --size-stat: 28px;
+  }
+
+  .app-shell {
+    padding: var(--space-8) var(--space-4);
+  }
+
+  .current-reading {
+    min-height: 42vh;
+    padding-block: var(--space-12);
+  }
+
+  .data-layout {
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+
+  .metric-value {
+    font-size: var(--size-body);
+  }
+
+  .metric-unit {
+    display: block;
+    margin-top: var(--space-1);
+    margin-left: 0;
+    font-size: var(--size-caption);
+  }
+
+  .metric--emphasis .metric-value {
+    font-size: var(--size-value);
+  }
+
+  .metric--emphasis .metric-unit {
+    display: inline;
+    margin-left: var(--space-2);
+    font-size: var(--size-body);
+  }
+
+  .app-footer {
+    flex-direction: column;
   }
 }
