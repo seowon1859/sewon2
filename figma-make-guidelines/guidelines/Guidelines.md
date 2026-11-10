@@ -30,7 +30,7 @@
 | --- | --- | --- |
 | 제품 이름 | 주변 소음 감지 | `PRODUCT.name` |
 | 제품 컨셉 (한 줄) | 내 공간의 소음 수치 | `PRODUCT.concept` |
-| 제품 설명 | 내 공간의 현재 소음 수치와 소음 변화, 평균 소음, 최고 소음, 측정 주기 | `PRODUCT.description` |
+| 제품 설명 | 내 공간의 현재 소음 수치와 소음 변화, 평균 소음, 최고 소음, 측정 주기를 보여줍니다. 내 공간의 소음을 관리해보세요. | `PRODUCT.description` |
 | 메인 컬러 | `#AAD7F6` | globals.css의 `--brand` |
 | 포인트 컬러 | `#34AEFF` | globals.css의 `--accent` |
 | 폰트 | Pretendard | globals.css의 `--font-sans`. 제품 이름, 센서값 숫자, 본문을 포함한 화면 전체에 사용 |
