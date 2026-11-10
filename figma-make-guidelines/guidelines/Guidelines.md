@@ -1,6 +1,6 @@
-# IoT 조명 웹앱 기본 프레임
+# 주변 소음 감지 웹앱 기본 프레임
 
-센서값에 반응하는 조명 제품의 웹, 스마트폰 화면이다. 검은 바탕 정가운데에 센서값과 연동된 달이 떠 있다. 데이터 흐름: 센서 → ESP32 → Supabase → 이 웹앱.
+내 공간의 현재 소음 수치와 변화 추이를 확인하는 웹, 스마트폰 화면이다. 현재 소음, 소음 변화, 평균 소음, 최고 소음, 측정 주기를 보여준다. 데이터 흐름: 소음 센서 → ESP32 → Supabase → 이 웹앱.
 이 문서 하나에 모든 규칙이 있다. 아래 Setup, Tokens, styles, 컴포넌트 섹션을 모두 따른다.
 
 ## 반드시 지킬 시각 규칙
@@ -24,15 +24,16 @@
 
 ## 제품 슬롯 (학생이 채우는 칸)
 
-제품 이름, 컨셉, 설명은 `src/product.ts`의 `PRODUCT` 객체 한 곳에서만 정의하고 화면은 거기서 읽는다. 비어 있으면 `[제품 이름]` 같은 자리표시를 `--ink-muted`로 보여준다.
+제품 이름, 컨셉, 설명은 `src/product.ts`의 `PRODUCT` 객체 한 곳에서만 정의하고 화면은 거기서 읽는다. 아래 값은 이 제품의 고정값으로 사용한다.
 
-| 슬롯 | 위치 |
-| --- | --- |
-| 제품 이름 | `PRODUCT.name` |
-| 제품 컨셉 (한 줄) | `PRODUCT.concept` |
-| 제품 설명 (2~3문장) | `PRODUCT.description` |
-| 메인 컬러 | globals.css의 `--brand`, `--on-brand`. 기본값 블루 |
-| 폰트 | globals.css의 `--font-sans`(메인, 기본값 Pretendard), `--font-display`(서브, 기본값 Rising CHAI). 서브는 제품 이름과 센서값 숫자에만 |
+| 슬롯 | 값 | 위치 |
+| --- | --- | --- |
+| 제품 이름 | 주변 소음 감지 | `PRODUCT.name` |
+| 제품 컨셉 (한 줄) | 내 공간의 소음 수치 | `PRODUCT.concept` |
+| 제품 설명 | 내 공간의 현재 소음 수치와 소음 변화, 평균 소음, 최고 소음, 측정 주기 | `PRODUCT.description` |
+| 메인 컬러 | `#AAD7F6` | globals.css의 `--brand` |
+| 포인트 컬러 | `#34AEFF` | globals.css의 `--accent` |
+| 폰트 | Pretendard | globals.css의 `--font-sans`. 제품 이름, 센서값 숫자, 본문을 포함한 화면 전체에 사용 |
 
 ## 기능
 
