@@ -1,0 +1,23 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Arduino uploader",
+			"type": "shell",
+			"command": "python3",
+			"args": [
+				"-u",
+				"upload.py",
+				"--port",
+				"/dev/cu.usbmodem1101"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		}
+	]
+}

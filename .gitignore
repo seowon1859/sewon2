@@ -1,8 +1,9 @@
-node_modules/
+node_modules
 dist/
 build/
 .cache/
-.env*
+.env
+.figma/make/1103_prototyping'
 .vite/
 vite.config.*.timestamp-*
 *.tsbuildinfo
